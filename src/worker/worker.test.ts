@@ -653,3 +653,53 @@ test("Worker - No API key or prompt leakage on error responses", async () => {
   assert.doesNotMatch(bodyText, /SECRET_USER_PROMPT_STRING_FOR_TEST/);
   assert.doesNotMatch(bodyText, /You are ZANA/);
 });
+
+test("Worker - POST /api/chat contract accepts academicContext", async () => {
+  const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/chat", {
+    method: "POST",
+    headers: {
+      Origin: "https://zana.krd",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      message: "ترشی برۆنستد-لۆری چییە؟",
+      profile: {
+        name: "Aram",
+        grade: "12",
+        stream: "scientific",
+        activeSubject: "chemistry",
+        level: "پێشکەوتوو",
+      },
+      academicContext: {
+        lessonTitle: "پێناسەی ترش و تفتەکان (تیۆری برۆنستد-لۆری و ئارینیۆس)",
+        conceptTitle: "ترشی برۆنستد-لۆری",
+        curriculumId: "curriculum-xwendn-krd",
+      },
+    }),
+  });
+
+  const env = createMockEnv();
+  const res = await worker.fetch(req, env);
+  // Expect 200 or 500/503 based on provider mock, but NOT 400 bad request (contract valid)
+  assert.notStrictEqual(res.status, 400);
+});
+
+test("Worker - POST /api/assessment validates missing state", async () => {
+  const req = new Request("https://zana-api-worker.zana-platform.workers.dev/api/assessment", {
+    method: "POST",
+    headers: {
+      Origin: "https://zana.krd",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      profile: { grade: "12", activeSubject: "chemistry" },
+    }),
+  });
+
+  const env = createMockEnv();
+  const res = await worker.fetch(req, env);
+  assert.strictEqual(res.status, 400);
+  const data = await res.json() as { error?: string };
+  assert.ok(data.error);
+});
+

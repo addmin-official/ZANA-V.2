@@ -1,6 +1,7 @@
 export interface StudentProfileContext {
   name?: string;
   grade?: string;
+  stream?: string;
   activeSubject?: string;
   level?: string;
 }
@@ -9,6 +10,11 @@ export interface ChatRequest {
   message: string;
   history?: Array<{ sender: string; text: string }>;
   profile: StudentProfileContext;
+  academicContext?: {
+    lessonTitle?: string;
+    conceptTitle?: string;
+    curriculumId?: string;
+  };
 }
 
 export interface ChatResponse {

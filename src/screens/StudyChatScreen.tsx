@@ -5,7 +5,7 @@ import { ChatMessage } from "../features/chat/ChatMessage.tsx";
 import { ChatInput } from "../features/chat/ChatInput.tsx";
 import { LoadingDots } from "../components/LoadingDots.tsx";
 import { AdaptiveLearningEngine } from "../learning/engine/AdaptiveLearningEngine.ts";
-import { DifficultyLevel } from "../learning/domain/MasteryTypes.ts";
+import { DifficultyLevel, MasteryStatus } from "../learning/domain/MasteryTypes.ts";
 import { XWENDN_PILOT_LESSONS } from "../curriculum/providers/XwendnCurriculumProvider.ts";
 import {
   Trash2,
@@ -153,7 +153,7 @@ export function StudyChatScreen({ profile, onNavigate: _onNavigate }: StudyChatS
     const prevMastery = {
       conceptId: activePractice.conceptTitle,
       masteryScore: 0.40,
-      status: "INTRODUCED" as const,
+      status: MasteryStatus.INTRODUCED,
       lastAttemptedAt: new Date().toISOString(),
       totalAttempts: 1,
       consecutiveCorrect: isCorrect ? 1 : 0,
@@ -171,7 +171,7 @@ export function StudyChatScreen({ profile, onNavigate: _onNavigate }: StudyChatS
 
     if (isCorrect) {
       setNextActionRecommendation(activePractice.nextConceptRecommendation || "پێشڕەوی بەرەو وانەی دواتر");
-      ZanaStorage.incrementStreak();
+      ZanaStorage.incrementQuestions(1);
     } else {
       setNextActionRecommendation("پێداچوونەوە بە هاوکێشە و چەمکی سەرەکی لەگەڵ مامۆستا زانا");
     }

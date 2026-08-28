@@ -12,6 +12,11 @@ import {
 } from "./ai/AiContracts.ts";
 import { validateImageSignature } from "./security/imageSignature.ts";
 import { PersistentLearningRecordProvider } from "../learning/providers/LearningRecordProvider.ts";
+import { PersistentLearningPlanProvider } from "../planning/providers/LearningPlanProvider.ts";
+import { LearningPlanService } from "../planning/services/LearningPlanService.ts";
+import { PlanningValidation } from "../planning/domain/PlanningValidation.ts";
+import { StudyTaskStatus, PlanGenerationMode } from "../planning/domain/LearningPlanTypes.ts";
+import { PlanRebalancer } from "../planning/engine/PlanRebalancer.ts";
 import { AdaptiveLearningEngine as StudentMasteryAdaptiveEngine } from "../learning/engine/AdaptiveLearningEngine.ts";
 import { CurriculumRegistry } from "../curriculum/registry/CurriculumRegistry.ts";
 import { AuthService } from "../services/authService.ts";
@@ -261,6 +266,8 @@ app.post(
 );
 
 const serverLearningProvider = new PersistentLearningRecordProvider();
+const serverPlanProvider = new PersistentLearningPlanProvider();
+const serverPlanningService = new LearningPlanService(serverPlanProvider, serverLearningProvider);
 
 async function getConceptTitleKu(conceptId: string): Promise<string> {
   const registry = CurriculumRegistry.getInstance();
@@ -284,9 +291,12 @@ app.get("/api/learning/mastery", async (req: Request, res: Response) => {
     const profile = await serverLearningProvider.getStudentMasteryProfile(studentId);
     res.json(profile);
   } catch (err: unknown) {
+    if (err instanceof Error && err.message === "UNAUTHORIZED") {
+      return res.status(401).json({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." });
+    }
     const category = classifyError(err);
     logMinimalError("/api/learning/mastery", category);
-    res.status(err instanceof Error && err.message === "UNAUTHORIZED" ? 401 : 500).json({ error: getClientSafeErrorMessage(category) });
+    res.status(500).json({ error: getClientSafeErrorMessage(category) });
   }
 });
 
@@ -306,9 +316,12 @@ app.get("/api/learning/mastery/:conceptId", async (req: Request, res: Response) 
     }
     res.json(state);
   } catch (err: unknown) {
+    if (err instanceof Error && err.message === "UNAUTHORIZED") {
+      return res.status(401).json({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." });
+    }
     const category = classifyError(err);
     logMinimalError("/api/learning/mastery/:conceptId", category);
-    res.status(err instanceof Error && err.message === "UNAUTHORIZED" ? 401 : 500).json({ error: getClientSafeErrorMessage(category) });
+    res.status(500).json({ error: getClientSafeErrorMessage(category) });
   }
 });
 
@@ -325,9 +338,12 @@ app.get("/api/learning/recommendations", async (req: Request, res: Response) => 
     const recs = await serverLearningProvider.listRecommendations(studentId, status);
     res.json(recs);
   } catch (err: unknown) {
+    if (err instanceof Error && err.message === "UNAUTHORIZED") {
+      return res.status(401).json({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." });
+    }
     const category = classifyError(err);
     logMinimalError("/api/learning/recommendations", category);
-    res.status(err instanceof Error && err.message === "UNAUTHORIZED" ? 401 : 500).json({ error: getClientSafeErrorMessage(category) });
+    res.status(500).json({ error: getClientSafeErrorMessage(category) });
   }
 });
 
@@ -352,9 +368,12 @@ app.post("/api/learning/events", async (req: Request, res: Response) => {
     const profile = await serverLearningProvider.getStudentMasteryProfile(studentId);
     res.json({ success: true, eventId: event.id, profile });
   } catch (err: unknown) {
+    if (err instanceof Error && err.message === "UNAUTHORIZED") {
+      return res.status(401).json({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." });
+    }
     const category = classifyError(err);
     logMinimalError("/api/learning/events", category);
-    res.status(err instanceof Error && err.message === "UNAUTHORIZED" ? 401 : 500).json({ error: getClientSafeErrorMessage(category) });
+    res.status(500).json({ error: getClientSafeErrorMessage(category) });
   }
 });
 
@@ -484,9 +503,12 @@ app.post("/api/learning/attempts", async (req: Request, res: Response) => {
       recommendation,
     });
   } catch (err: unknown) {
+    if (err instanceof Error && err.message === "UNAUTHORIZED") {
+      return res.status(401).json({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." });
+    }
     const category = classifyError(err);
     logMinimalError("/api/learning/attempts", category);
-    res.status(err instanceof Error && err.message === "UNAUTHORIZED" ? 401 : 500).json({ error: getClientSafeErrorMessage(category) });
+    res.status(500).json({ error: getClientSafeErrorMessage(category) });
   }
 });
 
@@ -506,9 +528,12 @@ app.post("/api/learning/sessions/start", async (req: Request, res: Response) => 
     await serverLearningProvider.createLearningSession(session);
     res.json(session);
   } catch (err: unknown) {
+    if (err instanceof Error && err.message === "UNAUTHORIZED") {
+      return res.status(401).json({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." });
+    }
     const category = classifyError(err);
     logMinimalError("/api/learning/sessions/start", category);
-    res.status(err instanceof Error && err.message === "UNAUTHORIZED" ? 401 : 500).json({ error: getClientSafeErrorMessage(category) });
+    res.status(500).json({ error: getClientSafeErrorMessage(category) });
   }
 });
 
@@ -531,10 +556,232 @@ app.post("/api/learning/sessions/:sessionId/end", async (req: Request, res: Resp
     await serverLearningProvider.updateLearningSession(session);
     res.json(session);
   } catch (err: unknown) {
+    if (err instanceof Error && err.message === "UNAUTHORIZED") {
+      return res.status(401).json({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." });
+    }
     const category = classifyError(err);
     logMinimalError("/api/learning/sessions/:sessionId/end", category);
-    res.status(err instanceof Error && err.message === "UNAUTHORIZED" ? 401 : 500).json({ error: getClientSafeErrorMessage(category) });
+    res.status(500).json({ error: getClientSafeErrorMessage(category) });
   }
+});
+
+// 7. PLANNING ENDPOINTS
+app.get("/api/planning/preferences", async (req: Request, res: Response) => {
+  try {
+    const studentId = await getAuthenticatedStudentId(req);
+    const preferences = await serverPlanningService.getPreferences(studentId);
+    res.json(preferences);
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message === "UNAUTHORIZED") {
+      return res.status(401).json({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." });
+    }
+    res.status(500).json({ error: "هەڵەیەک ڕوویدا لە وەرگرتنی ڕێکخستنەکان." });
+  }
+});
+
+app.post("/api/planning/preferences", async (req: Request, res: Response) => {
+  try {
+    const studentId = await getAuthenticatedStudentId(req);
+    const preferences = await serverPlanningService.savePreferences(studentId, req.body);
+    res.json(preferences);
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message === "UNAUTHORIZED") {
+      return res.status(401).json({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." });
+    }
+    res.status(500).json({ error: "هەڵەیەک ڕوویدا لە پاشەکەوتکردنی ڕێکخستنەکان." });
+  }
+});
+
+app.get("/api/planning/goals", async (req: Request, res: Response) => {
+  try {
+    const studentId = await getAuthenticatedStudentId(req);
+    const goal = await serverPlanningService.getActiveGoal(studentId);
+    res.json({ goals: [goal], activeGoal: goal });
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message === "UNAUTHORIZED") {
+      return res.status(401).json({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." });
+    }
+    res.status(500).json({ error: "هەڵەیەک ڕوویدا لە وەرگرتنی ئامانجەکان." });
+  }
+});
+
+app.post("/api/planning/goals", async (req: Request, res: Response) => {
+  try {
+    const studentId = await getAuthenticatedStudentId(req);
+    const validated = PlanningValidation.validateGoal(studentId, req.body);
+    const fullGoal = {
+      id: `goal_${studentId}_${Date.now()}`,
+      studentId,
+      type: validated.type!,
+      titleKu: validated.titleKu!,
+      targetSubjectId: validated.targetSubjectId!,
+      targetCurriculumScope: req.body.targetCurriculumScope,
+      targetDate: req.body.targetDate,
+      weeklyTargetMinutes: validated.weeklyTargetMinutes!,
+      successCriteria: req.body.successCriteria || { metric: "mastery_score", targetValue: 0.8 },
+      status: "ACTIVE" as const,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    await serverPlanProvider.saveGoal(fullGoal as never);
+    res.json(fullGoal);
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message === "UNAUTHORIZED") {
+      return res.status(401).json({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." });
+    }
+    res.status(500).json({ error: "هەڵەیەک ڕوویدا لە پاشەکەوتکردنی ئامانج." });
+  }
+});
+
+app.post("/api/planning/generate", async (req: Request, res: Response) => {
+  try {
+    const studentId = await getAuthenticatedStudentId(req);
+    const plan = await serverPlanningService.generatePlanForStudent(studentId, {
+      mode: (req.body.mode as PlanGenerationMode) || "MANUAL_REPLAN",
+      startDateIso: req.body.startDateIso as string | undefined,
+    });
+    res.json(plan);
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message === "UNAUTHORIZED") {
+      return res.status(401).json({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." });
+    }
+    res.status(500).json({ error: "هەڵەیەک ڕوویدا لە دروستکردنی پلانی خوێندن." });
+  }
+});
+
+app.get("/api/planning/current", async (req: Request, res: Response) => {
+  try {
+    const studentId = await getAuthenticatedStudentId(req);
+    const plan = await serverPlanningService.getCurrentPlan(studentId);
+    res.json(plan);
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message === "UNAUTHORIZED") {
+      return res.status(401).json({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." });
+    }
+    res.status(500).json({ error: "هەڵەیەک ڕوویدا لە هێنانی پلانی بەردەست." });
+  }
+});
+
+app.get("/api/planning/today", async (req: Request, res: Response) => {
+  try {
+    const studentId = await getAuthenticatedStudentId(req);
+    const dateParam = (req.query.date as string) || undefined;
+    const todayPlan = await serverPlanningService.getTodayPlan(studentId, dateParam);
+    res.json(todayPlan);
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message === "UNAUTHORIZED") {
+      return res.status(401).json({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." });
+    }
+    res.status(500).json({ error: "هەڵەیەک ڕوویدا لە هێنانی پلانی ئەمڕۆ." });
+  }
+});
+
+app.get("/api/planning/week", async (req: Request, res: Response) => {
+  try {
+    const studentId = await getAuthenticatedStudentId(req);
+    const weekPlan = await serverPlanningService.getWeekPlan(studentId);
+    res.json(weekPlan);
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message === "UNAUTHORIZED") {
+      return res.status(401).json({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." });
+    }
+    res.status(500).json({ error: "هەڵەیەک ڕوویدا لە هێنانی پلانی هەفتانە." });
+  }
+});
+
+app.post("/api/planning/tasks/:taskId/start", async (req: Request, res: Response) => {
+  try {
+    const studentId = await getAuthenticatedStudentId(req);
+    const { taskId } = req.params;
+    const task = await serverPlanningService.updateTaskStatus(studentId, taskId, StudyTaskStatus.IN_PROGRESS);
+    res.json(task);
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message === "UNAUTHORIZED") {
+      return res.status(401).json({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." });
+    }
+    res.status(500).json({ error: "هەڵەیەک ڕوویدا لە دەستپێکردنی ئەرک." });
+  }
+});
+
+app.post("/api/planning/tasks/:taskId/complete", async (req: Request, res: Response) => {
+  try {
+    const studentId = await getAuthenticatedStudentId(req);
+    const { taskId } = req.params;
+    const task = await serverPlanningService.updateTaskStatus(
+      studentId,
+      taskId,
+      StudyTaskStatus.COMPLETED,
+      req.body.actualDurationMinutes
+    );
+    res.json(task);
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message === "UNAUTHORIZED") {
+      return res.status(401).json({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." });
+    }
+    res.status(500).json({ error: "هەڵەیەک ڕوویدا لە تەواوکردنی ئەرک." });
+  }
+});
+
+app.post("/api/planning/tasks/:taskId/skip", async (req: Request, res: Response) => {
+  try {
+    const studentId = await getAuthenticatedStudentId(req);
+    const { taskId } = req.params;
+    const task = await serverPlanningService.updateTaskStatus(studentId, taskId, StudyTaskStatus.SKIPPED);
+    res.json(task);
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message === "UNAUTHORIZED") {
+      return res.status(401).json({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." });
+    }
+    res.status(500).json({ error: "هەڵەیەک ڕوویدا لە پەڕاندنی ئەرک." });
+  }
+});
+
+app.post("/api/planning/rebalance", async (req: Request, res: Response) => {
+  try {
+    const studentId = await getAuthenticatedStudentId(req);
+    const plan = await serverPlanningService.getCurrentPlan(studentId);
+    const prefs = await serverPlanningService.getPreferences(studentId);
+    const { updatedPlan, adjustment } = PlanRebalancer.rebalancePlan(plan, prefs, {});
+    await serverPlanProvider.savePlan(updatedPlan);
+    await serverPlanProvider.saveAdjustment(adjustment);
+    res.json({ plan: updatedPlan, adjustment });
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message === "UNAUTHORIZED") {
+      return res.status(401).json({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." });
+    }
+    res.status(500).json({ error: "هەڵەیەک ڕوویدا لە هاوسەنگکردنەوەی پلان." });
+  }
+});
+
+app.get("/api/planning/next-action", async (req: Request, res: Response) => {
+  try {
+    const studentId = await getAuthenticatedStudentId(req);
+    const nextAction = await serverPlanningService.getNextBestAction(studentId);
+    res.json(nextAction);
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message === "UNAUTHORIZED") {
+      return res.status(401).json({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." });
+    }
+    res.status(500).json({ error: "هەڵەیەک ڕوویدا لە هێنانی هەنگاوی داهاتوو." });
+  }
+});
+
+app.get("/api/planning/progress", async (req: Request, res: Response) => {
+  try {
+    const studentId = await getAuthenticatedStudentId(req);
+    const progress = await serverPlanningService.getProgress(studentId);
+    res.json(progress);
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message === "UNAUTHORIZED") {
+      return res.status(401).json({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." });
+    }
+    res.status(500).json({ error: "هەڵەیەک ڕوویدا لە هێنانی بەرەوپێشچوونی پلان." });
+  }
+});
+
+// Any unmatched /api/* route returns JSON 404 (preventing Vite SPA HTML fallback)
+app.all("/api/*", (_req: Request, res: Response) => {
+  res.status(404).json({ error: "Not Found" });
 });
 
 app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {

@@ -37,7 +37,7 @@ export class ProviderAdapter {
     return GeminiProvider.generate(params);
   }
 
-  static async chat(apiKey: string, req: ChatRequest, env?: unknown): Promise<ChatResponse> {
+  static async chat(apiKey: string | undefined, req: ChatRequest, env?: unknown): Promise<ChatResponse> {
     const model = resolvePrimaryModel(env as Record<string, unknown> | undefined);
 
     const grade = req.profile.grade || "12";
@@ -141,7 +141,7 @@ export class ProviderAdapter {
     return validateChatResponse(json);
   }
 
-  static async assessment(apiKey: string, req: AssessmentRequest, env?: unknown): Promise<AssessmentResponse> {
+  static async assessment(apiKey: string | undefined, req: AssessmentRequest, env?: unknown): Promise<AssessmentResponse> {
     const model = resolvePrimaryModel(env as Record<string, unknown> | undefined);
     const systemInstruction = buildSystemPrompt({
       studentName: req.profile.name || "قوتابی",
@@ -211,7 +211,7 @@ ${historySummary.join("\n")}
     return validateAssessmentResponse(json);
   }
 
-  static async report(apiKey: string, req: ReportRequest, env?: unknown): Promise<ReportResponse> {
+  static async report(apiKey: string | undefined, req: ReportRequest, env?: unknown): Promise<ReportResponse> {
     const model = resolvePrimaryModel(env as Record<string, unknown> | undefined);
     const systemInstruction = buildSystemPrompt({
       studentName: req.profile.name || "قوتابی",
@@ -260,7 +260,7 @@ ${historySummary.join("\n")}
     return validateReportResponse(json);
   }
 
-  static async ask(apiKey: string, req: AskRequest, env?: unknown): Promise<AskResponse> {
+  static async ask(apiKey: string | undefined, req: AskRequest, env?: unknown): Promise<AskResponse> {
     const model = resolvePrimaryModel(env as Record<string, unknown> | undefined);
     const systemInstruction = buildSystemPrompt({
       studentName: req.context.studentName || "قوتابی",
@@ -312,7 +312,7 @@ ${historySummary.join("\n")}
     return validateAskResponse(json);
   }
 
-  static async vision(apiKey: string, req: VisionRequest, env?: unknown): Promise<VisionResponse> {
+  static async vision(apiKey: string | undefined, req: VisionRequest, env?: unknown): Promise<VisionResponse> {
     const model = resolveVisionModel(env as Record<string, unknown> | undefined);
     const base64Data = uint8ArrayToBase64(req.imageBytes);
 
