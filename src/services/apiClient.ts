@@ -36,13 +36,20 @@ export const ZanaApiClient = {
   async sendChatMessage(
     message: string,
     history: ChatMessage[],
-    profile: StudentProfile
+    profile: StudentProfile,
+    academicContext?: { lessonTitle?: string; conceptTitle?: string; curriculumId?: string },
+    token?: string
   ): Promise<ChatResponse> {
     try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
       const response = await fetch(getApiUrl("/api/chat"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, history, profile }),
+        headers,
+        body: JSON.stringify({ message, history, profile, academicContext }),
       });
 
       if (!response.ok) {

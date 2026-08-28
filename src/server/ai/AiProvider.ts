@@ -16,7 +16,8 @@ import {
   validateAskResponse,
   validateVisionResponse,
 } from "./AiContracts.ts";
-import { buildSystemPrompt } from "../../ai/buildSystemPrompt.ts";
+import { buildSystemPrompt, CurriculumPromptContext } from "../../ai/buildSystemPrompt.ts";
+import { CurriculumRetriever } from "../../curriculum/retrieval/CurriculumRetriever.ts";
 import { resolvePrimaryModel, resolveVisionModel } from "../config/aiModels.ts";
 
 function uint8ArrayToBase64(bytes: Uint8Array): string {
@@ -38,12 +39,66 @@ export class ProviderAdapter {
 
   static async chat(apiKey: string, req: ChatRequest, env?: unknown): Promise<ChatResponse> {
     const model = resolvePrimaryModel(env as Record<string, unknown> | undefined);
+
+    const grade = req.profile.grade || "12";
+    const subject = req.profile.activeSubject || "chemistry";
+    const stream = req.profile.stream;
+    const lessonTitle = req.academicContext?.lessonTitle;
+    const conceptTitle = req.academicContext?.conceptTitle;
+
+    let curriculumContext: CurriculumPromptContext | undefined = undefined;
+    try {
+      const retriever = new CurriculumRetriever();
+      const retrieval = await retriever.retrieve({
+        grade,
+        stream,
+        subject,
+        lessonTitle,
+        conceptTitle,
+        query: req.message,
+      });
+
+      if (retrieval.groundingStatus === "GROUNDED") {
+        const topLesson = retrieval.matchedLessons[0];
+        curriculumContext = {
+          curriculumId: topLesson?.curriculumId || "curriculum-xwendn-krd",
+          unitTitle: topLesson?.unitId,
+          lessonTitle: topLesson?.title || lessonTitle,
+          conceptTitle: retrieval.matchedConcepts[0] || conceptTitle,
+          groundingStatus: "GROUNDED",
+          sourceStatus: topLesson?.sourceStatus || "OPEN_LICENSE",
+          retrievalConfidence: retrieval.confidence,
+          excerpts: retrieval.excerpts,
+        };
+      } else {
+        curriculumContext = {
+          curriculumId: "unspecified",
+          groundingStatus: "UNGROUNDED",
+          sourceStatus: "NONE",
+          retrievalConfidence: 0,
+          excerpts: [],
+        };
+      }
+    } catch {
+      curriculumContext = {
+        curriculumId: "unspecified",
+        groundingStatus: "UNGROUNDED",
+        sourceStatus: "NONE",
+        retrievalConfidence: 0,
+        excerpts: [],
+      };
+    }
+
     const systemInstruction = buildSystemPrompt({
       studentName: req.profile.name || "قوتابی",
-      grade: req.profile.grade || "9",
-      subject: req.profile.activeSubject || "بیرکاری",
+      grade,
+      stream,
+      subject,
       level: req.profile.level || "ناوەند",
       mode: "chat",
+      lessonTitle,
+      conceptTitle,
+      curriculumContext,
     });
 
     const contents = (req.history || []).map((msg) => ({
