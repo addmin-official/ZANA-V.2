@@ -1,49 +1,62 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { fetchNextBestAction, NextBestAction } from '../api/studyService.ts';
+import { fetchStudentProfile, StudentProfile } from '../api/profileService.ts';
 import { NextBestActionCard } from '../components/dashboard/NextBestActionCard.tsx';
+import { ErrorBoundary } from '../components/common/ErrorBoundary.tsx';
+import { RefreshCw } from 'lucide-react';
 
-interface StudentDashboardProps {
+interface DashboardContentProps {
   onNavigate?: (routeOrTab: string) => void;
 }
 
-export const StudentDashboard: React.FC<StudentDashboardProps> = ({ onNavigate }) => {
+const DashboardContent: React.FC<DashboardContentProps> = ({ onNavigate }) => {
+  const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [nba, setNba] = useState<NextBestAction | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Pilot constraints: Grade 12 Chemistry
-  const pilotGrade = 12;
-  const pilotSubject = 'chemistry';
+  const loadDashboardData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-  useEffect(() => {
-    let isMounted = true;
+      const userProfile = await fetchStudentProfile();
+      setProfile(userProfile);
 
-    const loadDashboard = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const action = await fetchNextBestAction(pilotGrade, pilotSubject);
-        if (isMounted) setNba(action);
-      } catch (err) {
-        console.error('[Dashboard Error]', err);
-        if (isMounted) setError('هەڵەیەک ڕوویدا لە هێنانەدی پلانەکەت. تکایە دووبارە هەوڵبدەرەوە.'); // Error fetching plan
-      } finally {
-        if (isMounted) setLoading(false);
+      // Select primary subject (Defaulting to first active for MVP)
+      const targetSubject = userProfile.activeSubjects[0];
+      if (targetSubject) {
+        const action = await fetchNextBestAction(userProfile.grade, targetSubject);
+        setNba(action);
       }
-    };
-
-    void loadDashboard();
-    return () => {
-      isMounted = false;
-    };
+    } catch (err) {
+      console.error('[Dashboard Error]', err);
+      setError('هەڵەیەک ڕوویدا لە هێنانەدی زانیارییەکان. تکایە دووبارە هەوڵبدەرەوە.'); // Error fetching data
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      await Promise.resolve();
+      if (active) {
+        await loadDashboardData();
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [loadDashboardData]);
+
   const handleStartLearning = (topicId: string) => {
-    // Route into the active learning/tutor session loop
-    if (onNavigate) {
-      onNavigate(`chat:${topicId}`);
-    } else if (typeof window !== 'undefined') {
-      window.location.hash = `#/tutor/${pilotSubject}/${topicId}`;
+    if (profile && profile.activeSubjects[0]) {
+      if (onNavigate) {
+        onNavigate(`chat:${topicId}`);
+      } else if (typeof window !== 'undefined') {
+        window.location.hash = `#/tutor/${profile.activeSubjects[0]}/${topicId}`;
+      }
     }
   };
 
@@ -61,18 +74,31 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ onNavigate }
           {loading ? (
             <div className="animate-pulse bg-slate-100 h-32 rounded-2xl w-full border border-slate-200" />
           ) : error ? (
-            <div className="bg-red-50 text-red-600 p-4 rounded-xl border border-red-100">{error}</div>
+            <div className="bg-red-50 p-4 rounded-xl border border-red-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <span className="text-red-600">{error}</span>
+              <button
+                onClick={() => void loadDashboardData()}
+                className="inline-flex items-center gap-2 text-red-700 bg-red-100 hover:bg-red-200 px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
+              >
+                <RefreshCw className="w-4 h-4" />
+                دووبارە هەوڵبدەرەوە
+              </button>
+            </div>
           ) : nba ? (
             <NextBestActionCard action={nba} onActionClick={handleStartLearning} />
           ) : (
             <div className="bg-slate-50 text-slate-600 p-6 rounded-xl border border-slate-100 text-center">
-              زانیاری نەدۆزرایەوە.
+              هیچ بابەتێک نەدۆزرایەوە بۆ فێربوون.
             </div>
           )}
         </section>
-
-        {/* Existing dashboard components (Mastery overview, recent activity) remain below */}
       </main>
     </div>
   );
 };
+
+export const StudentDashboard: React.FC<DashboardContentProps> = (props) => (
+  <ErrorBoundary>
+    <DashboardContent {...props} />
+  </ErrorBoundary>
+);

@@ -1,4 +1,4 @@
-import express, { Request, Response, NextFunction } from "express";
+import express, { type Request, type Response, type NextFunction } from "express";
 import dotenv from "dotenv";
 import multer from "multer";
 import { ProviderAdapter } from "./ai/AiProvider.ts";
@@ -21,6 +21,11 @@ import { AdaptiveLearningEngine as StudentMasteryAdaptiveEngine } from "../learn
 import { CurriculumRegistry } from "../curriculum/registry/CurriculumRegistry.ts";
 import { AuthService } from "../services/authService.ts";
 import { DifficultyLevel, MisconceptionStatus } from "../learning/domain/MasteryTypes.ts";
+import { handleStudyPlanRoute } from "./api/study/plan.ts";
+import { handleStudentProfileRoute } from "./api/student/profile.ts";
+import { handleFeedbackRoute } from "./api/feedback.ts";
+import { handleTelemetryExportRoute } from "./api/internal/telemetryExport.ts";
+import { handleHealthRoute } from "./api/health.ts";
 
 dotenv.config();
 
@@ -785,6 +790,118 @@ app.get("/api/planning/progress", async (req: Request, res: Response) => {
       return res.status(401).json({ error: "تکایە سەرەتا بچۆ ناو هەژمارەکەت." });
     }
     res.status(500).json({ error: "هەڵەیەک ڕوویدا لە هێنانی بەرەوپێشچوونی پلان." });
+  }
+});
+
+app.get("/api/study/plan", async (req: Request, res: Response) => {
+  try {
+    const fullUrl = `${req.protocol}://${req.get("host") || "localhost"}${req.originalUrl}`;
+    const headers = new Headers();
+    for (const [k, v] of Object.entries(req.headers)) {
+      if (typeof v === "string") headers.set(k, v);
+      else if (Array.isArray(v)) headers.set(k, v.join(", "));
+    }
+    const webReq = new Request(fullUrl, {
+      method: "GET",
+      headers,
+    });
+    const webRes = await handleStudyPlanRoute(webReq, {
+      FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID,
+    });
+    const data = await webRes.json();
+    res.status(webRes.status).json(data);
+  } catch (err: unknown) {
+    res.status(500).json({ error: (err as Error)?.message || "Internal Server Error" });
+  }
+});
+
+app.get("/api/student/profile", async (req: Request, res: Response) => {
+  try {
+    const fullUrl = `${req.protocol}://${req.get("host") || "localhost"}${req.originalUrl}`;
+    const headers = new Headers();
+    for (const [k, v] of Object.entries(req.headers)) {
+      if (typeof v === "string") headers.set(k, v);
+      else if (Array.isArray(v)) headers.set(k, v.join(", "));
+    }
+    const webReq = new Request(fullUrl, {
+      method: "GET",
+      headers,
+    });
+    const webRes = await handleStudentProfileRoute(webReq, {
+      FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID,
+    });
+    const data = await webRes.json();
+    res.status(webRes.status).json(data);
+  } catch (err: unknown) {
+    res.status(500).json({ error: (err as Error)?.message || "Internal Server Error" });
+  }
+});
+
+app.post("/api/feedback", async (req: Request, res: Response) => {
+  try {
+    const fullUrl = `${req.protocol}://${req.get("host") || "localhost"}${req.originalUrl}`;
+    const headers = new Headers();
+    for (const [k, v] of Object.entries(req.headers)) {
+      if (typeof v === "string") headers.set(k, v);
+      else if (Array.isArray(v)) headers.set(k, v.join(", "));
+    }
+    headers.set("Content-Type", "application/json");
+    const webReq = new Request(fullUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(req.body),
+    });
+    const webRes = await handleFeedbackRoute(webReq, {
+      FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID,
+    });
+    const data = await webRes.json();
+    res.status(webRes.status).json(data);
+  } catch (err: unknown) {
+    res.status(500).json({ error: (err as Error)?.message || "Internal Server Error" });
+  }
+});
+
+app.get("/api/internal/telemetry", async (req: Request, res: Response) => {
+  try {
+    const fullUrl = `${req.protocol}://${req.get("host") || "localhost"}${req.originalUrl}`;
+    const headers = new Headers();
+    for (const [k, v] of Object.entries(req.headers)) {
+      if (typeof v === "string") headers.set(k, v);
+      else if (Array.isArray(v)) headers.set(k, v.join(", "));
+    }
+    const webReq = new Request(fullUrl, {
+      method: "GET",
+      headers,
+    });
+    const webRes = await handleTelemetryExportRoute(webReq, {
+      ADMIN_TELEMETRY_SECRET: process.env.ADMIN_TELEMETRY_SECRET,
+    });
+    const data = await webRes.json();
+    res.status(webRes.status).json(data);
+  } catch (err: unknown) {
+    res.status(500).json({ error: (err as Error)?.message || "Internal Server Error" });
+  }
+});
+
+app.get("/api/health/deep", async (req: Request, res: Response) => {
+  try {
+    const fullUrl = `${req.protocol}://${req.get("host") || "localhost"}${req.originalUrl}`;
+    const headers = new Headers();
+    for (const [k, v] of Object.entries(req.headers)) {
+      if (typeof v === "string") headers.set(k, v);
+      else if (Array.isArray(v)) headers.set(k, v.join(", "));
+    }
+    const webReq = new Request(fullUrl, {
+      method: "GET",
+      headers,
+    });
+    const webRes = await handleHealthRoute(webReq, {
+      GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+    });
+    const data = await webRes.json();
+    res.status(webRes.status).json(data);
+  } catch (err: unknown) {
+    res.status(500).json({ error: (err as Error)?.message || "Internal Server Error" });
   }
 });
 

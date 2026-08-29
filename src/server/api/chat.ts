@@ -1,6 +1,7 @@
 import { globalCurriculumRegistry } from '../../lib/curriculum/CurriculumRegistry.ts';
 import { buildTutorSystemPrompt } from '../ai/promptBuilder.ts';
 import { verifyAuthToken } from '../auth/firebase.ts';
+import { enforceAiRateLimit } from '../middleware/rateLimiter.ts';
 import { GradeLevel, SubjectId } from '../../lib/curriculum/types.ts';
 
 export interface ChatRequestPayload {
@@ -10,7 +11,7 @@ export interface ChatRequestPayload {
   messages: { role: 'user' | 'model'; parts: { text: string }[] }[];
 }
 
-export async function handleChatRoute(request: Request, env: Record<string, string | undefined>): Promise<Response> {
+export async function handleChatRoute(request: Request, env: Record<string, unknown>): Promise<Response> {
   // 1. Security: Verify Firebase Auth Token
   const authHeader = request.headers.get('Authorization');
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -27,6 +28,28 @@ export async function handleChatRoute(request: Request, env: Record<string, stri
       status: 403,
       headers: { 'Content-Type': 'application/json' },
     });
+  }
+  const studentId = decodedToken.uid;
+
+  // 2. EDGE PROTECTION: Enforce Rate Limit
+  try {
+    await enforceAiRateLimit(env, studentId);
+  } catch (error: unknown) {
+    if ((error as Error)?.message === 'RATE_LIMIT_EXCEEDED') {
+      return new Response(
+        JSON.stringify({
+          error: 'گەیشتیتە سنوری دیاریکراوی بەکارهێنان بۆ ئەم کاتژمێرە. تکایە دواتر هەوڵبدەرەوە.',
+        }),
+        {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/json',
+            'Retry-After': '3600',
+          },
+        }
+      );
+    }
+    throw error;
   }
 
   // 2. Parse payload
